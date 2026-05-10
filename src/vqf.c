@@ -7,6 +7,38 @@
 #include "vqf.h"
 #include <string.h>
 
+// CMSIS-DSP optimization support
+#ifdef CONFIG_CMSIS_DSP
+#include <arm_math.h>
+#define USE_CMSIS_DSP 1
+#else
+#define USE_CMSIS_DSP 0
+#endif
+
+// Math function wrappers for CMSIS-DSP optimization
+#if USE_CMSIS_DSP
+#define VQF_SIN(x)    arm_sin_f32(x)
+#define VQF_COS(x)    arm_cos_f32(x)
+static inline vqf_real_t vqf_sqrt(vqf_real_t x)
+{
+    float32_t out = 0;
+    arm_sqrt_f32(x, &out);
+    return out;
+}
+#define VQF_SQRT(x)    vqf_sqrt((x))
+static inline vqf_real_t vqf_atan2(vqf_real_t y, vqf_real_t x) {
+    float32_t out = 0;
+    arm_atan2_f32(y, x, &out);
+    return out;
+}
+#define VQF_ATAN2(y,x) vqf_atan2((y), (x))
+#else
+#define VQF_SIN(x)     sinf(x)
+#define VQF_COS(x)     cosf(x)
+#define VQF_SQRT(x)    sqrtf(x)
+#define VQF_ATAN2(y,x) atan2f((y), (x))
+#endif
+
 #define EPS FLT_EPSILON
 #define NaN NAN
 #define M_SQRT2     1.41421356237309504880f   // sqrt(2)s
@@ -43,9 +75,13 @@ void init_params(vqf_params_t *const params)
 
 static void vqf_fill_real(vqf_real_t *dst, size_t n, vqf_real_t val)
 {
+#if USE_CMSIS_DSP
+    arm_fill_f32(val, dst, n);
+#else
     for (size_t i = 0; i < n; i++) {
         dst[i] = val;
     }
+#endif
 }
 
 static void vqf_fill_double(vqf_double_t *dst, size_t n, vqf_double_t val)
@@ -73,7 +109,7 @@ static vqf_real_t norm(const vqf_real_t vec[], size_t N)
         s += vec[i]*vec[i];
     }
     // sqrt can be replaced by arm_sqrt_f32 from CMSIS_DSP
-    return sqrtf(s);
+    return VQF_SQRT(s);
 }
 
 static void normalize(vqf_real_t vec[], size_t N)
@@ -82,13 +118,20 @@ static void normalize(vqf_real_t vec[], size_t N)
     if (n < EPS) {
         return;
     }
+#if USE_CMSIS_DSP
+    arm_scale_f32(vec, 1.0f/n, vec, N);
+#else
     for(size_t i = 0; i < N; i++) {
         vec[i] /= n;
     }
+#endif
 }
 
 static void clip(vqf_real_t vec[], size_t N, vqf_real_t min, vqf_real_t max)
 {
+#if USE_CMSIS_DSP
+    arm_clip_f32(vec, vec, min, max, N);
+#else
     for(size_t i = 0; i < N; i++) {
         if (vec[i] < min) {
             vec[i] = min;
@@ -96,6 +139,7 @@ static void clip(vqf_real_t vec[], size_t N, vqf_real_t min, vqf_real_t max)
             vec[i] = max;
         }
     }
+#endif
 }
 
 
@@ -133,8 +177,17 @@ static void quatApplyDelta(vqf_real_t q[4], vqf_real_t delta, vqf_real_t out[4])
 {
     // out = quatMultiply([cos(delta/2), 0, 0, sin(delta/2)], q)
     // sin and cos can be replaced by arm_sin_f32 and arm_cos_f32 from CMSIS-DSP
+#if USE_CMSIS_DSP
+    // arm_sin_cos_f32() expects the input angle in DEGREES (see CMSIS-DSP controller_functions.h).
+    // VQF uses radians internally, so we must convert.
+    vqf_real_t half_delta = delta * 0.5f;
+    vqf_real_t s, c;
+    vqf_real_t half_delta_deg = half_delta * (vqf_real_t)(180.0f / M_PIf);
+    arm_sin_cos_f32(half_delta_deg, &s, &c);
+#else
     vqf_real_t c = cosf(delta/2);
     vqf_real_t s = sinf(delta/2);
+#endif
     vqf_real_t w = c * q[0] - s * q[3];
     vqf_real_t x = c * q[1] - s * q[2];
     vqf_real_t y = c * q[2] + s * q[1];
@@ -186,7 +239,7 @@ static void filterCoeffs(vqf_real_t tau, vqf_real_t Ts, vqf_double_t outB[3], vq
     // tan_fast can be replaced by sin/cos from CMSIS_DSP lib
     vqf_double_t C = tanf(M_PIf*fc*(vqf_double_t)(Ts));
     // sqrt can be replaced by arm_sqrt_f32 from CMSIS_DSP
-    vqf_double_t D = C*C + sqrtf(2)*C + 1;
+    vqf_double_t D = C*C + VQF_SQRT(2)*C + 1;
     vqf_double_t b0 = C*C/D;
     outB[0] = b0;
     outB[1] = 2*b0;
@@ -194,7 +247,7 @@ static void filterCoeffs(vqf_real_t tau, vqf_real_t Ts, vqf_double_t outB[3], vq
     // a0 = 1.0
     outA[0] = 2*(C*C-1)/D; // a1
     // sqrt can be replaced by arm_sqrt_f32 from CMSIS_DSP
-    outA[1] = (1-sqrtf(2)*C+C*C)/D; // a2
+    outA[1] = (1-VQF_SQRT(2)*C+C*C)/D; // a2
 }
 
 static void filterInitialState(vqf_real_t x0, const vqf_double_t b[], const vqf_double_t a[], vqf_double_t out[2])
@@ -390,8 +443,8 @@ void updateGyr(vqf_params_t *const params, vqf_state_t *const state, vqf_coeffs_
     vqf_real_t angle = gyrNorm * coeffs->gyrTs;
     if (gyrNorm > EPS) {
         // sin cos can be replaced by arm_sin_f32 and arm_cos_f32 from CMSIS-DSP
-        vqf_real_t c = cosf(angle/2);
-        vqf_real_t s = sinf(angle/2)/gyrNorm;
+        vqf_real_t c = VQF_COS(angle/2);
+        vqf_real_t s = VQF_SIN(angle/2)/gyrNorm;
         vqf_real_t gyrStepQuat[4] = {c, s*gyrNoBias[0], s*gyrNoBias[1], s*gyrNoBias[2]};
         quatMultiply(state->gyrQuat, gyrStepQuat, state->gyrQuat);
         normalize(state->gyrQuat, 4);
@@ -437,7 +490,7 @@ void updateAcc(vqf_params_t *const params, vqf_state_t *const state, vqf_coeffs_
     // inclination correction
     vqf_real_t accCorrQuat[4];
     // sqrt can be replaced by arm_sqrt_f32 from CMSIS_DSP
-    vqf_real_t q_w = sqrtf((accEarth[2]+1)/2);
+    vqf_real_t q_w = VQF_SQRT((accEarth[2]+1)/2);
     if (q_w > 1e-6f) {
         accCorrQuat[0] = q_w;
         accCorrQuat[1] = 0.5f*accEarth[1]/q_w;
@@ -618,6 +671,7 @@ void updateMag(vqf_params_t *const params, vqf_state_t *const state, vqf_coeffs_
 
     // calculate disagreement angle based on current magnetometer measurement
     state->lastMagDisAngle = atan2f(magEarth[0], magEarth[1]) - state->delta;
+    state->lastMagDisAngle = VQF_ATAN2(magEarth[0], magEarth[1]) - state->delta;
 
     // make sure the disagreement angle is in the range [-pi, pi]
     if (state->lastMagDisAngle > (vqf_real_t)(M_PIf)) {
@@ -756,7 +810,7 @@ vqf_real_t getBiasEstimate(vqf_state_t *const state, vqf_coeffs_t *const coeffs,
     vqf_real_t P = vqf_min(vqf_max(vqf_max(sum1, sum2), sum3), coeffs->biasP0);
     // convert standard deviation from 0.01deg to rad
     // sqrt can be replaced by arm_sqrt_f32 from CMSIS_DSP
-    return sqrtf(P)*(vqf_real_t)(M_PIf/100.0f/180.0f);
+    return VQF_SQRT(P)*(vqf_real_t)(M_PIf/100.0f/180.0f);
 }
 
 void setBiasEstimate(vqf_state_t *const state, vqf_real_t bias[3], vqf_real_t sigma)
@@ -782,8 +836,8 @@ bool getMagDistDetected(vqf_state_t *const state)
 void getRelativeRestDeviations(vqf_params_t *const params, vqf_state_t *const state, vqf_real_t out[2])
 {
     // sqrt can be replaced by arm_sqrt_f32 from CMSIS_DSP
-    out[0] = sqrtf(state->restLastSquaredDeviations[0]) / (params->restThGyr*(vqf_real_t)(M_PIf/180.0f));
-    out[1] = sqrtf(state->restLastSquaredDeviations[1]) / params->restThAcc;
+    out[0] = VQF_SQRT(state->restLastSquaredDeviations[0]) / (params->restThGyr*(vqf_real_t)(M_PIf/180.0f));
+    out[1] = VQF_SQRT(state->restLastSquaredDeviations[1]) / params->restThAcc;
 }
 
 vqf_real_t getMagRefNorm(vqf_state_t *const state)
