@@ -822,8 +822,8 @@ void setRestBiasEstEnabled(vqf_params_t *const params, vqf_state_t *const state,
     params->restBiasEstEnabled = enabled;
     state->restDetected = false;
 
-    vqf_fill_real(state->restLastSquaredDeviations, 3, 0.0);
-    // std::fill(state->restLastSquaredDeviations, state->restLastSquaredDeviations + 3, 0.0);
+    vqf_fill_real(state->restLastSquaredDeviations, 2, 0.0);
+    // std::fill(state->restLastSquaredDeviations, state->restLastSquaredDeviations + 2, 0.0);
     state->restT = 0.0;
     vqf_fill_real(state->restLastGyrLp, 3, 0.0);
     // std::fill(state->restLastGyrLp, state->restLastGyrLp + 3, 0.0);
@@ -860,7 +860,7 @@ void setTauAcc(vqf_params_t *const params, vqf_state_t *const state, vqf_coeffs_
     }
     params->tauAcc = tauAcc;
     vqf_double_t newB[3];
-    vqf_double_t newA[3];
+    vqf_double_t newA[2];
 
     filterCoeffs(params->tauAcc, coeffs->accTs, newB, newA);
     filterAdaptStateForCoeffChange(state->lastAccLp, 3, coeffs->accLpB, coeffs->accLpA, newB, newA, state->accLpState);
@@ -930,8 +930,8 @@ void resetState(vqf_params_t *const params, vqf_state_t *const state, vqf_coeffs
     // std::fill(state->motionBiasEstBiasLpState, state->motionBiasEstBiasLpState + 2*2, NaN);
 
 
-    vqf_fill_real(state->restLastSquaredDeviations, 3, 0.0);
-    // std::fill(state->restLastSquaredDeviations, state->restLastSquaredDeviations + 3, 0.0);
+    vqf_fill_real(state->restLastSquaredDeviations, 2, 0.0);
+    // std::fill(state->restLastSquaredDeviations, state->restLastSquaredDeviations + 2, 0.0);
     state->restT = 0.0;
     vqf_fill_real(state->restLastGyrLp, 3, 0.0);
     // std::fill(state->restLastGyrLp, state->restLastGyrLp + 3, 0.0);
