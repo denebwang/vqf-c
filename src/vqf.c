@@ -177,17 +177,8 @@ static void quatApplyDelta(vqf_real_t q[4], vqf_real_t delta, vqf_real_t out[4])
 {
     // out = quatMultiply([cos(delta/2), 0, 0, sin(delta/2)], q)
     // sin and cos can be replaced by arm_sin_f32 and arm_cos_f32 from CMSIS-DSP
-#if USE_CMSIS_DSP
-    // arm_sin_cos_f32() expects the input angle in DEGREES (see CMSIS-DSP controller_functions.h).
-    // VQF uses radians internally, so we must convert.
-    vqf_real_t half_delta = delta * 0.5f;
-    vqf_real_t s, c;
-    vqf_real_t half_delta_deg = half_delta * (vqf_real_t)(180.0f / M_PIf);
-    arm_sin_cos_f32(half_delta_deg, &s, &c);
-#else
-    vqf_real_t c = cosf(delta/2);
-    vqf_real_t s = sinf(delta/2);
-#endif
+    vqf_real_t c = VQF_COS(delta/2);
+    vqf_real_t s = VQF_SIN(delta/2);
     vqf_real_t w = c * q[0] - s * q[3];
     vqf_real_t x = c * q[1] - s * q[2];
     vqf_real_t y = c * q[2] + s * q[1];
