@@ -73,7 +73,7 @@ static vqf_real_t norm(const vqf_real_t vec[], size_t N)
         s += vec[i]*vec[i];
     }
     // sqrt can be replaced by arm_sqrt_f32 from CMSIS_DSP
-    return sqrt(s);
+    return sqrtf(s);
 }
 
 static void normalize(vqf_real_t vec[], size_t N)
@@ -425,7 +425,7 @@ void updateAcc(vqf_params_t *const params, vqf_state_t *const state, vqf_coeffs_
     // inclination correction
     vqf_real_t accCorrQuat[4];
     // sqrt can be replaced by arm_sqrt_f32 from CMSIS_DSP
-    vqf_real_t q_w = sqrt((accEarth[2]+1)/2);
+    vqf_real_t q_w = sqrtf((accEarth[2]+1)/2);
     if (q_w > 1e-6f) {
         accCorrQuat[0] = q_w;
         accCorrQuat[1] = 0.5f*accEarth[1]/q_w;
@@ -738,9 +738,9 @@ vqf_real_t getBiasEstimate(vqf_state_t *const state, vqf_coeffs_t *const coeffs,
     // use largest absolute row sum as upper bound estimate for largest eigenvalue (Gershgorin circle theorem)
     // and clip output to biasSigmaInit
     // fabs can be replaced by arm_abs_f32 from CMSIS-DSP
-    vqf_real_t sum1 = fabs(state->biasP[0]) + fabs(state->biasP[1]) + fabs(state->biasP[2]);
-    vqf_real_t sum2 = fabs(state->biasP[3]) + fabs(state->biasP[4]) + fabs(state->biasP[5]);
-    vqf_real_t sum3 = fabs(state->biasP[6]) + fabs(state->biasP[7]) + fabs(state->biasP[8]);
+    vqf_real_t sum1 = fabsf(state->biasP[0]) + fabsf(state->biasP[1]) + fabsf(state->biasP[2]);
+    vqf_real_t sum2 = fabsf(state->biasP[3]) + fabsf(state->biasP[4]) + fabsf(state->biasP[5]);
+    vqf_real_t sum3 = fabsf(state->biasP[6]) + fabsf(state->biasP[7]) + fabsf(state->biasP[8]);
     vqf_real_t P = vqf_min(vqf_max(vqf_max(sum1, sum2), sum3), coeffs->biasP0);
     // convert standard deviation from 0.01deg to rad
     // sqrt can be replaced by arm_sqrt_f32 from CMSIS_DSP
