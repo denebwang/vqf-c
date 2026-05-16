@@ -5,9 +5,6 @@
 #ifndef VQF_H__
 #define VQF_H__
 
-#define VQF_SINGLE_PRECISION
-// #define VQF_NO_MOTION_BIAS_ESTIMATION
-
 #ifdef __cplusplus
 extern "C" {
 #endif
